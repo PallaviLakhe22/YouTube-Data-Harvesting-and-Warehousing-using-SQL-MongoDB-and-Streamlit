@@ -298,41 +298,7 @@ with col2:
 
         # Retrieve the document with the specified name
         result = collection.find_one({"Channel_Name": document_name})
-        client.close()
-
-# ========================================   /     Data Migrate zone (Stored data to MySQL)    /   ========================================== #
-
-with col2:
-    st.header(':violet[Data Migrate zone]')
-    st.write ('''(Note:- This zone specific channel data **Migrate to :blue[MySQL] database from  :green[MongoDB] database** depending on your selection,
-                if unavailable your option first collect data.)''')
-    
-     # Connect to the MongoDB server
-    client = pymongo.MongoClient("mongodb://localhost:27017/")
-
-    # create a database or use existing one
-    mydb = client['Youtube_DB']
-
-    # create a collection
-    collection = mydb['Youtube_data']
-
-    # Collect all document names and give them
-    document_names = []
-    for document in collection.find():
-        document_names.append(document["Channel_Name"])
-    document_name = st.selectbox('**Select Channel name**', options = document_names, key='document_id')
-    st.write('''Migrate to MySQL database from MongoDB database to click below **:blue['Migrate to MySQL']**.''')
-    Migrate = st.button('**Migrate_to_MySQL**')
-    
-     # Define Session state to Migrate to MySQL button
-    if 'migrate_sql' not in st.session_state:
-        st.session_state_migrate_sql = False
-    if Migrate or st.session_state_migrate_sql:
-        st.session_state_migrate_sql = True
-
-        # Retrieve the document with the specified name
-        result = collection.find_one({"Channel_Name": document_name})
-        client.close()                       
+        client.close()     
 
  # ----------------------------- Data conversion --------------------- #
 
