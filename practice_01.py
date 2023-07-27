@@ -2,14 +2,11 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 from googleapiclient.discovery import build
 import pymongo
-import psycopg2
 import pandas as pd
 import mysql.connector
-import sqlalchemy
-import pymysql
 
 st.set_page_config(layout="wide")
-api_key = "AIzaSyA7KPjdtLzJQg_yNzMsbvjsi8QfH29SeqY"
+api_key = "AIzaSyALbrRwmvZikXjsFhdA6UtEGA8_AqUCsBI"
 you_tube = build("youtube", "v3", developerKey=api_key)
 
 # create a client instance of MongoDB
@@ -30,6 +27,9 @@ upload = channel_list.replace_one({'_id': 'channel_id'}, final_output_data, upse
 # print the result of the insertion operation
 st.write(f"Updated document id: {upload.upserted_id if upload.upserted_id else upload.modified_count}")
 
+# Close the connection
+# client.close()
+
 # Connect to the MySQL server
 connect = mysql.connector.connect(
         host = "127.0.0.1",
@@ -41,6 +41,8 @@ mycursor = connect.cursor()
 mycursor.execute("CREATE DATABASE IF NOT EXISTS hi_db")
 
 mycursor.execute("use hi_db")
+
+
 
 def channel(c_id):  # Returns scrapped channel info
     channel_data = you_tube.channels().list(
@@ -141,17 +143,22 @@ with st.sidebar:
     )
 if opt == "About":
     st.title(":red[YouTube Data Harvesting and Warehousing using SQL, MongoDB and Streamlit]")
-    st.write("The problem statement is to create a Streamlit application that allows users to access and"
-    "analyze data from multiple YouTube channels." 
-    "The application should have the following features:"
-    "Ability to input a YouTube channel ID and retrieve all the relevant data"
-    "(Channel name, subscribers, total video count, playlist ID, video ID, likes, dislikes, comments of each video) using Google API."
-    "Option to store the data in a MongoDB database as a data lake."
-    "Ability to collect data for up to 10 different YouTube channels and store them in the data lake by clicking a button."
-    "Option to select a channel name and migrate its data from the data lake to a SQL database as tables."
-    "Ability to search and retrieve data from the SQL database using different search options,"
-    "joining tables to get channel details."
-")
+    st.write("The YouTube Data Scraper and Analysis web page is a powerful tool designed to provide valuable "
+             "insights into YouTube channels based on user-provided channel IDs. By utilizing the YouTube API, "
+             "the application extracts crucial details such as the channel name, subscriber count, like count, "
+             "total videos, and comprehensive statistics for each video, including view count, likes, dislikes, "
+             "and comments.")
+    st.write("The webpage goes beyond data extraction and offers a range of analysis and visualization options "
+             "using the collected data. Users can delve into the information to gain valuable insights into a "
+             "channel's performance, audience engagement, and overall growth trajectory. The flexibility of Streamlit "
+             "enables customization and expansion of the application to cater to specific analysis requirements, "
+             "allowing users to uncover meaningful patterns and make data-driven decisions")
+    st.write("For businesses, the YouTube Data Scraper and Analysis web application serves as a robust solution to "
+             "extract, store, and analyze YouTube channel data. By harnessing the power of the scraped data, "
+             "businesses can gain actionable insights, optimize content strategies, and make informed decisions to "
+             "drive success on the platform. With its user-friendly features and the capability to perform sentiment "
+             "analysis using machine learning techniques, the application provides a comprehensive toolkit for "
+             "businesses to thrive and effectively connect with their audience on YouTube.")
     st.write("In summary, the YouTube Data Scraper and Analysis web application streamlines the process of gathering "
              "and analyzing data from YouTube channels. By leveraging the YouTube API, MongoDB, and MySQL, "
              "the application empowers users with a powerful toolset to extract valuable insights and facilitate "
@@ -189,8 +196,9 @@ elif opt == "Upload":
 elif opt == "Migration":
     st.title("YouTube Data Harvesting and Warehousing with MongoDB, SQL")  # Have to get the list channel_name here
     channel_id = st.text_input("Enter the channel id")
+    available_channel_names = [channel['Channel_Name'] for channel in channel_list.find()]
     id_selected = st.selectbox("Select a channel name to migrate the data from mongodb to sql",
-                               options=channel_list)
+                               options=available_channel_names)
     migrate = st.button("Migrate")
 
     if migrate:
@@ -222,6 +230,7 @@ elif opt == "Migration":
         video_df = pd.DataFrame(video_dict)
         video_df["view_count"] = video_df["view_count"].astype("int64")
         video_df["like_count"] = video_df["like_count"].astype("int64")
+        video_df["dislike_count"] = video_df["dislike_count"].astype("int64") 
         video_df["favorite_count"] = video_df["favorite_count"].astype("int64")
         video_df["video_duration"] = pd.to_timedelta(video_df["video_duration"])
         video_df["video_duration"] = video_df["video_duration"].dt.total_seconds().astype("int64")
@@ -258,9 +267,9 @@ elif opt == "Migration":
         #print(comments_df.info())
         #print(comments_df.head(2))
         mycursor.execute("CREATE TABLE IF NOT EXISTS COMMENTS(VIDEO_ID VARCHAR(75), COMMENT_ID VARCHAR(75) PRIMARY KEY, "
-                    "PUBLISHED_AT VARCHAR(30), COMMENTED_BY VARCHAR(50), COMMENT_GIVEN TEXT)")
+                    "PUBLISHED_AT VARCHAR(30), COMMENT_GIVEN TEXT)")
         connect.commit()
-        d = "INSERT INTO COMMENTS(VIDEO_ID, COMMENT_ID, PUBLISHED_AT,  COMMENTED_BY, COMMENT_GIVEN) VALUES(%s, %s, " \
+        d = "INSERT INTO COMMENTS(VIDEO_ID, COMMENT_ID, PUBLISHED_AT, COMMENT_GIVEN) VALUES(%s, %s, " \
             "%s, %s, %s)"
         for index, value_3 in comments_df.iterrows():
             val_3 = value_3["comment_id"]
@@ -270,8 +279,7 @@ elif opt == "Migration":
                 mycursor.execute(f"DELETE FROM COMMENTS WHERE COMMENT_ID = '{val_3}'")
                 connect.commit()
             result_4 = (
-                value_3["video_id"], value_3["comment_id"], value_3["published_at"], value_3["author_display_name"],
-                value_3["display_text"])
+                value_3["video_id"], value_3["comment_id"], value_3["published_at"], value_3["comment_given"])
             mycursor.execute(d, result_4)
         connect.commit()
 
@@ -357,15 +365,16 @@ else:
         df = pd.DataFrame(fetch, columns=['Channels published video in the year 2022'])
         st.table(df)
 
-    if question_selected == "What is the average duration of all videos in each channel, and what are their " \
-                            "corresponding channel names?":
-        mycursor.execute("SELECT CHANNEL.CHANNEL_NAME, AVG(VIDEO.VIDEO_DURATION)::INT AS AVERAGE_DURATION FROM VIDEO JOIN "
+if question_selected == "What is the average duration of all videos in each channel, and what are their " \
+                           "corresponding channel names?":
+        mycursor.execute("SELECT CHANNEL.CHANNEL_NAME, AVG(VIDEO.VIDEO_DURATION) FROM VIDEO JOIN "
                     "CHANNEL ON CHANNEL.CHANNEL_ID = VIDEO.CHANNEL_ID GROUP BY CHANNEL.CHANNEL_ID")
         fetch = mycursor.fetchall()
         df = pd.DataFrame(fetch, columns=['Channel Name', 'Average video duration in Seconds'])
         st.table(df)
 
-    if question_selected == "Which videos have the highest number of comments, and what are their corresponding " \
+
+if question_selected == "Which videos have the highest number of comments, and what are their corresponding " \
                             "channel names?":
         mycursor.execute("SELECT CHANNEL.CHANNEL_NAME, VIDEO.VIDEO_TITLE, VIDEO.COMMENT_COUNT FROM VIDEO JOIN CHANNEL ON "
                     "CHANNEL.CHANNEL_ID = VIDEO.CHANNEL_ID ORDER BY VIDEO.COMMENT_COUNT DESC LIMIT 10")
